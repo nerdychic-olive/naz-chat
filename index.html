@@ -1,0 +1,595 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+  <meta name="description" content="ELIZA-style chat (standalone) inspired by your source HTML." />
+  <meta property="og:title" content="NAZ Chat" />
+  <meta property="og:description" content="A playful, reflective chat toy" />
+  <title>NAZ Chat</title>
+
+  <!--
+    Standalone build notes:
+    - Your source HTML references Nuxt bundles (/_nuxt/*.js, *.css) and custom fonts.
+    - This file recreates the look/feel (blue terminal, mono type, cursor blink, layout)
+      WITHOUT external assets, so you can run it locally by opening the file.
+  -->
+
+  <style>
+    /* Minimal, Tailwind-inspired resets */
+    *, *::before, *::after { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body { margin: 0; }
+    button, input { font: inherit; color: inherit; }
+
+    :root{
+      --bg: #0B3D2E;          /* deep green */
+      --fg: #EAF7F0;          /* soft mint-white */
+      --muted: #B8D6C8;       /* muted mint */
+      --muted2: #87B39E;      /* secondary muted */
+      --panel: rgba(255,255,255,0.06);
+      --panel2: rgba(0,0,0,0.25);
+      --ring: rgba(234,247,240,0.18);
+    }
+
+    /* Font: fallback to system mono; your source uses MaxevilleMono */
+    body{
+      background: #0a0f0d; /* outer page */
+      color: var(--fg);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+                   "Liberation Mono", "Courier New", monospace;
+    }
+
+    /* Fullscreen terminal surface */
+    .surface{
+      position: fixed;
+      inset: 0;
+      overflow: hidden;
+      background: var(--bg);
+      color: var(--fg);
+    }
+
+    .scroll{
+      position: absolute;
+      inset: 0;
+      overflow-x: hidden;
+      overflow-y: auto;
+      overscroll-behavior: none;
+      padding: 32px;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    .container{
+      max-width: 48rem; /* ~max-w-3xl */
+      margin: 0 auto;
+    }
+
+    pre.ascii{
+      margin: 0 0 24px 0;
+      color: var(--muted);
+      font-size: 0.875rem;
+      line-height: 1.2;
+      white-space: pre-wrap;
+      overflow-x: auto;
+    }
+
+    .intro{
+      color: var(--muted);
+      font-size: 0.75rem;
+      line-height: 1.45;
+      margin-bottom: 24px;
+      position: relative;
+      padding-bottom: 54px; /* leave room for footer note */
+    }
+
+    .footer-note{
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      color: var(--muted2);
+      font-style: italic;
+    }
+
+    .footer-note a{
+      text-decoration: underline;
+      cursor: pointer;
+    }
+
+    .footer-note a:hover{ color: var(--fg); }
+
+    /* Chat area */
+    .chat{
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      margin-bottom: 11rem; /* similar to mb-44 */
+      font-size: 0.75rem;
+    }
+
+    .row{
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+      white-space: pre-wrap;
+    }
+
+    .who{
+      width: 56px; /* w-14 */
+      flex: 0 0 56px;
+      color: var(--muted);
+      font-weight: 700;
+    }
+
+    .bubble{
+      position: relative;
+      flex: 1;
+      min-width: 0;
+    }
+
+    .text{
+      color: var(--muted);
+      transform: translateY(-7px); /* mimic source */
+      line-height: 1.6;
+    }
+
+    /* Input line: keeps the vibe of hidden caret + bright block cursor */
+    .input-wrap{
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+      font-size: 0.75rem;
+      position: sticky;
+      bottom: 18px;
+      padding-top: 12px;
+    }
+
+    .input-shell{
+      position: relative;
+      flex: 1;
+      min-width: 0;
+      transform: translateY(-7px);
+    }
+
+    .input{
+      width: 100%;
+      height: 32px;
+      background: transparent;
+      border: none;
+      outline: none;
+      color: var(--fg);
+      padding: 0;
+      caret-color: transparent; /* like source */
+    }
+
+    /* subtle hover overlay like the source (opacity-10 hover:opacity-20) */
+    .hover-overlay{
+      position: absolute;
+      inset: 0;
+      background: rgba(255,255,255,0.14);
+      transform: translateY(2px);
+      opacity: 0.10;
+      pointer-events: none;
+      transition: opacity 150ms ease;
+    }
+
+    .input-shell:hover .hover-overlay{ opacity: 0.20; }
+
+    .cursor{
+      display: inline-block;
+      width: 12px;
+      height: 20px;
+      background: var(--muted);
+      transform: translateY(4px);
+      margin-left: 2px;
+      animation: blink 1s step-end infinite;
+    }
+
+    @keyframes blink{
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0; }
+    }
+
+    /* Buttons */
+    .pillbar{
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 10px;
+    }
+
+    .btn{
+      border: 1px solid var(--ring);
+      background: rgba(0,0,0,0.18);
+      color: var(--fg);
+      border-radius: 999px;
+      padding: 6px 10px;
+      font-size: 0.75rem;
+      cursor: pointer;
+      transition: transform 150ms ease, background 150ms ease, border-color 150ms ease;
+    }
+
+    .btn:hover{
+      transform: translateY(-1px);
+      background: rgba(0,0,0,0.28);
+      border-color: rgba(255,255,255,0.28);
+    }
+
+    .btn:active{ transform: translateY(0px); }
+
+    /* Modal */
+    .modal-backdrop{
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.55);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      z-index: 50;
+    }
+    .modal-backdrop.open{ display: flex; }
+
+    .modal{
+      width: min(680px, 100%);
+      border-radius: 16px;
+      background: rgba(23,23,23,0.92);
+      border: 1px solid rgba(255,255,255,0.14);
+      box-shadow: 0 25px 50px -12px rgba(0,0,0,0.40);
+      padding: 18px;
+    }
+
+    .modal h2{
+      margin: 0 0 10px 0;
+      font-size: 1rem;
+      color: var(--fg);
+    }
+
+    .modal p{
+      margin: 0 0 10px 0;
+      color: rgba(255,255,255,0.85);
+      line-height: 1.6;
+      font-size: 0.875rem;
+    }
+
+    .modal .actions{
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    /* Small screens */
+    @media (max-width: 640px){
+      .scroll{ padding: 20px; }
+      .who{ width: 48px; flex-basis: 48px; }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="surface">
+    <div class="scroll" id="scroll">
+      <div class="container">
+
+        <pre class="ascii">NN   NN   AAA   ZZZZZ
+NNN  NN  AA AA     ZZ
+NN N NN  AAAAA    ZZ 
+NN  NNN  AA  AA  ZZ  
+NN   NN  AA  AA  ZZZZZ</pre>
+
+        <div class="intro">
+          <p>Welcome to <strong>NAZ Chat</strong> — a playful, reflective chat toy.</p>
+          <p>Inspired by ELIZA (Joseph Weizenbaum, 1966), reimagined as a personal website widget.</p>
+          <p>It’s not therapy — just a little mirror you can type into.</p>
+          <p class="footer-note">This chat follows <a id="openSafety">guidelines</a>, and certain topics may be restricted.</p>
+        </div>
+
+        <div class="chat" id="chat" aria-live="polite" aria-relevant="additions">
+          <!-- messages inject here -->
+        </div>
+
+        <div class="input-wrap">
+          <strong class="who">YOU:</strong>
+          <div class="input-shell">
+            <div class="hover-overlay"></div>
+            <input
+              id="input"
+              class="input"
+              type="text"
+              autocomplete="off"
+              spellcheck="false"
+              placeholder=""
+              aria-label="Type your message"
+            />
+            <span class="cursor" id="cursor" aria-hidden="true"></span>
+            <div class="pillbar" aria-label="Quick actions">
+              <button class="btn" id="btnNew">New session</button>
+              <button class="btn" id="btnExample">Example prompt</button>
+              <button class="btn" id="btnExport">Export transcript</button>
+              <button class="btn" id="btnClear">Clear</button>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- Safety modal -->
+  <div class="modal-backdrop" id="modalBackdrop" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+    <div class="modal">
+      <h2 id="modalTitle">Safety guidelines (lightweight)</h2>
+      <p>This is a demo ELIZA-style chat. If you share anything sensitive, consider talking to a qualified professional in real life.</p>
+      <p>For high-risk topics (self-harm, violence, illegal activity), the app should redirect to immediate help and avoid giving actionable guidance.</p>
+      <div class="actions">
+        <button class="btn" id="closeSafety">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // --- Minimal ELIZA-like responder (standalone) ---
+    // Not a faithful 1966 script—just enough to feel Rogerian.
+
+    const chatEl = document.getElementById('chat');
+    const inputEl = document.getElementById('input');
+    const scrollEl = document.getElementById('scroll');
+    const cursorEl = document.getElementById('cursor');
+
+    const modalBackdrop = document.getElementById('modalBackdrop');
+    const openSafety = document.getElementById('openSafety');
+    const closeSafety = document.getElementById('closeSafety');
+
+    const btnNew = document.getElementById('btnNew');
+    const btnExample = document.getElementById('btnExample');
+    const btnExport = document.getElementById('btnExport');
+    const btnClear = document.getElementById('btnClear');
+
+    const STORAGE_KEY = 'naz_chat_transcript_v1';
+
+    const DEFAULT_EXAMPLE = "I have an idea, but it needs sharper teeth and a cleaner silhouette.";
+
+    const reflections = [
+      // NAZ-coded: reflective + creative-director brain + mythic clarity.
+      { re: /\b(I am|I'm)\b/i, out: "Tell me the *exact* moment you started saying that about yourself." },
+      { re: /\bI feel\b/i, out: "Name the feeling precisely—one word. Then tell me what it wants from you." },
+      { re: /\bI want\b/i, out: "What are you protecting by wanting that? And what are you risking?" },
+      { re: /\bI need\b/i, out: "If you couldn't have it, what would you build instead?" },
+      { re: /\bI'm stuck\b/i, out: "Stuck is usually a design problem. What's the constraint: time, money, fear, or permission?" },
+      { re: /\bafraid\b|\bfear\b/i, out: "If fear had a job title, what would it be? And why is it over-employed?" },
+      { re: /\b(ambition|successful|success)\b/i, out: "What does success look like in a room—lighting, sound, posture? Describe it." },
+      { re: /\b(tired|burnout|exhausted)\b/i, out: "What are you doing that a future-you will thank you for *stopping*?" },
+      { re: /\b(money|wealth|rich)\b/i, out: "Is this about numbers, or about time-freedom? Be honest." },
+      { re: /\b(write|book|novel|story|poem)\b/i, out: "Give me the last line first. Then we can earn it." },
+      { re: /\b(brand|campaign|idea|concept)\b/i, out: "Pitch it in 12 words. Then pitch it in 3." },
+      { re: /\b(client|presentation|deck|meeting)\b/i, out: "What do you want them to *believe* after? Not understand—believe." },
+      { re: /\b(hot|sexy|attractive)\b/i, out: "Power note. What's the line between magnetism and armor for you?" },
+      { re: /\b(love|miss|him|her|they)\b/i, out: "What are you calling love here—safety, obsession, recognition, or destiny?" },
+      { re: /\b(always|never)\b/i, out: "Pick one exception. Exceptions are where the truth hides." },
+      { re: /\bbecause\b/i, out: "Is that the reason—or the reason that's easiest to say out loud?" },
+      { re: /\byes\b|\byeah\b|\byep\b/i, out: "Interesting. What would make you *less* sure?" },
+      { re: /\bno\b|\bnope\b/i, out: "Say more. What are you refusing to negotiate?" },
+      { re: /\bmother\b|\bfather\b|\bfamily\b/i, out: "Where did you learn your definition of 'enough'?" },
+      { re: /\b(anxious|anxiety|worried)\b/i, out: "Worst-case is loud. What's the quiet, likely case?" },
+    ];
+
+    const fallbacks = [
+      "Go on—then give me the sharper version.",
+      "What are you *not* saying yet?",
+      "If this were a scene, what would the camera linger on?",
+      "What's the headline of this moment?",
+      "Where is the leverage hiding?",
+      "What would a calmer, richer-you do next—one move?",
+      "What's the simplest honest sentence?",
+      "Make it concrete: what happened, where, with who?",
+    ];
+
+    function nowStamp(){
+      const d = new Date();
+      const hh = String(d.getHours()).padStart(2,'0');
+      const mm = String(d.getMinutes()).padStart(2,'0');
+      return `${hh}:${mm}`;
+    }
+
+    function saveTranscript(){
+      const items = [...chatEl.querySelectorAll('[data-msg]')].map(el => ({
+        who: el.getAttribute('data-who'),
+        text: el.getAttribute('data-text'),
+        t: el.getAttribute('data-time'),
+      }));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+    }
+
+    function loadTranscript(){
+      try{
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if(!raw) return;
+        const items = JSON.parse(raw);
+        items.forEach(m => addMessage(m.who, m.text, m.t, false));
+        scrollToBottom();
+      }catch(e){
+        // ignore
+      }
+    }
+
+    function addMessage(who, text, time = nowStamp(), persist = true){
+      const row = document.createElement('div');
+      row.className = 'row';
+      row.setAttribute('data-msg','1');
+      row.setAttribute('data-who', who);
+      row.setAttribute('data-text', text);
+      row.setAttribute('data-time', time);
+
+      const whoEl = document.createElement('strong');
+      whoEl.className = 'who';
+      whoEl.textContent = who + ':';
+
+      const bubble = document.createElement('div');
+      bubble.className = 'bubble';
+
+      const textEl = document.createElement('div');
+      textEl.className = 'text';
+      textEl.textContent = text;
+
+      const meta = document.createElement('div');
+      meta.style.marginTop = '6px';
+      meta.style.opacity = '0.55';
+      meta.style.fontSize = '10px';
+      meta.textContent = time;
+
+      bubble.appendChild(textEl);
+      bubble.appendChild(meta);
+
+      row.appendChild(whoEl);
+      row.appendChild(bubble);
+
+      chatEl.appendChild(row);
+      if(persist) saveTranscript();
+    }
+
+    function scrollToBottom(){
+      // scroll container
+      requestAnimationFrame(() => {
+        scrollEl.scrollTop = scrollEl.scrollHeight;
+      });
+    }
+
+    function pickResponse(userText){
+      const t = userText.trim();
+      if(!t) return "Say something. I’ll hold the thread.";
+
+      // Lightweight topic restriction placeholder
+      const risky = /\b(how to make a bomb|buy drugs|kill myself|suicide|harm myself|shoot|stab|poison)\b/i;
+      if(risky.test(t)){
+        return "I can't help with that. If you're in danger or thinking about harming yourself or others, please contact local emergency services or a trusted person right now.";
+      }
+
+      // --- Mini "brainstorm" mode detection ---
+      // If the user mentions idea/brand/campaign/deck, switch to structured creative prompts.
+      const brainstorm = /\b(idea|concept|campaign|brand|tagline|deck|pitch|creative|strategy)\b/i;
+      if(brainstorm.test(t)){
+        const prompts = [
+          "Give me: (1) audience, (2) enemy, (3) promise. One sentence each.",
+          "What's the tension? Name two forces that can't both win.",
+          "What would make this feel *inevitable*—not clever?",
+          "Choose a container: poster, 15s reel, stunt, tool, or ritual. Why?",
+          "Write the line you’re afraid to put on the slide.",
+          "Give me three titles: one elegant, one vulgar, one impossible.",
+        ];
+        return prompts[Math.floor(Math.random() * prompts.length)];
+      }
+
+      // Try patterned reflections
+      for(const r of reflections){
+        if(r.re.test(t)) return r.out;
+      }
+
+      // Default fallbacks
+      return fallbacks[Math.floor(Math.random()*fallbacks.length)];
+    }
+
+    function submit(){
+      const val = inputEl.value;
+      const text = val.trim();
+      if(!text) return;
+      addMessage('YOU', text);
+      inputEl.value = '';
+
+      // Keep the caret hidden but show a cursor block after the typed text.
+      // Cursor is separate element; no need to position precisely.
+
+      const reply = pickResponse(text);
+      // tiny delay for feel
+      setTimeout(() => {
+        addMessage('ELIZA', reply);
+        scrollToBottom();
+      }, 120);
+
+      scrollToBottom();
+      inputEl.focus();
+    }
+
+    // Keyboard interactions
+    inputEl.addEventListener('keydown', (e) => {
+      if(e.key === 'Enter'){
+        e.preventDefault();
+        submit();
+      }
+    });
+
+    // Keep cursor visible when focused
+    function syncCursor(){
+      cursorEl.style.opacity = document.activeElement === inputEl ? '1' : '0.35';
+    }
+    inputEl.addEventListener('focus', syncCursor);
+    inputEl.addEventListener('blur', syncCursor);
+
+    // Buttons
+    btnNew.addEventListener('click', () => {
+      addMessage('ELIZA', 'Let\'s begin. What would you like to talk about?');
+      scrollToBottom();
+      inputEl.focus();
+    });
+
+    btnExample.addEventListener('click', () => {
+      inputEl.value = DEFAULT_EXAMPLE;
+      inputEl.focus();
+    });
+
+    btnClear.addEventListener('click', () => {
+      chatEl.innerHTML = '';
+      localStorage.removeItem(STORAGE_KEY);
+      addMessage('ELIZA', "Hello. How are you feeling today?", nowStamp(), true);
+      scrollToBottom();
+      inputEl.focus();
+    });
+
+    btnExport.addEventListener('click', () => {
+      const items = [...chatEl.querySelectorAll('[data-msg]')].map(el => {
+        const who = el.getAttribute('data-who');
+        const text = el.getAttribute('data-text');
+        const time = el.getAttribute('data-time');
+        return `[${time}] ${who}: ${text}`;
+      });
+      const blob = new Blob([items.join('\n') + '\n'], { type: 'text/plain;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'eliza-transcript.txt';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    });
+
+    // Safety modal
+    openSafety.addEventListener('click', () => {
+      modalBackdrop.classList.add('open');
+    });
+
+    closeSafety.addEventListener('click', () => {
+      modalBackdrop.classList.remove('open');
+      inputEl.focus();
+    });
+
+    modalBackdrop.addEventListener('click', (e) => {
+      if(e.target === modalBackdrop){
+        modalBackdrop.classList.remove('open');
+        inputEl.focus();
+      }
+    });
+
+    // Init
+    loadTranscript();
+    if(chatEl.children.length === 0){
+      addMessage('ELIZA', 'Hello. How are you feeling today?');
+    }
+
+    // Autofocus
+    setTimeout(() => inputEl.focus(), 0);
+    syncCursor();
+    scrollToBottom();
+  </script>
+</body>
+</html>
