@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
-  <meta name="description" content="ELIZA-style chat (standalone) inspired by your source HTML." />
+  <meta name="description" content="NAZ-style chat (standalone) inspired by your source HTML." />
   <meta property="og:title" content="NAZ Chat" />
   <meta property="og:description" content="A playful, reflective chat toy" />
   <title>NAZ Chat</title>
@@ -280,7 +280,7 @@ NN   NN  AA  AA  ZZZZZ</pre>
 
         <div class="intro">
           <p>Welcome to <strong>NAZ Chat</strong> — a playful, reflective chat toy.</p>
-          <p>Inspired by ELIZA (Joseph Weizenbaum, 1966), reimagined as a personal website widget.</p>
+          <p>Inspired by NAZ (Joseph Weizenbaum, 1966), reimagined as a personal website widget.</p>
           <p>It’s not therapy — just a little mirror you can type into.</p>
           <p class="footer-note">This chat follows <a id="openSafety">guidelines</a>, and certain topics may be restricted.</p>
         </div>
@@ -320,7 +320,7 @@ NN   NN  AA  AA  ZZZZZ</pre>
   <div class="modal-backdrop" id="modalBackdrop" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
     <div class="modal">
       <h2 id="modalTitle">Safety guidelines (lightweight)</h2>
-      <p>This is a demo ELIZA-style chat. If you share anything sensitive, consider talking to a qualified professional in real life.</p>
+      <p>This is a demo NAZ-style chat. If you share anything sensitive, consider talking to a qualified professional in real life.</p>
       <p>For high-risk topics (self-harm, violence, illegal activity), the app should redirect to immediate help and avoid giving actionable guidance.</p>
       <div class="actions">
         <button class="btn" id="closeSafety">Close</button>
@@ -329,7 +329,7 @@ NN   NN  AA  AA  ZZZZZ</pre>
   </div>
 
   <script>
-    // --- Minimal ELIZA-like responder (standalone) ---
+    // --- Minimal NAZ-like responder (standalone) ---
     // Not a faithful 1966 script—just enough to feel Rogerian.
 
     const chatEl = document.getElementById('chat');
@@ -502,7 +502,7 @@ NN   NN  AA  AA  ZZZZZ</pre>
       const reply = pickResponse(text);
       // tiny delay for feel
       setTimeout(() => {
-        addMessage('ELIZA', reply);
+        addMessage('NAZ', reply);
         scrollToBottom();
       }, 120);
 
@@ -527,7 +527,7 @@ NN   NN  AA  AA  ZZZZZ</pre>
 
     // Buttons
     btnNew.addEventListener('click', () => {
-      addMessage('ELIZA', 'Let\'s begin. What would you like to talk about?');
+      addMessage('NAZ', 'Let\'s begin. What would you like to talk about?');
       scrollToBottom();
       inputEl.focus();
     });
@@ -540,7 +540,7 @@ NN   NN  AA  AA  ZZZZZ</pre>
     btnClear.addEventListener('click', () => {
       chatEl.innerHTML = '';
       localStorage.removeItem(STORAGE_KEY);
-      addMessage('ELIZA', "Hello. How are you feeling today?", nowStamp(), true);
+      addMessage('NAZ', "Hello. How are you feeling today?", nowStamp(), true);
       scrollToBottom();
       inputEl.focus();
     });
@@ -556,7 +556,7 @@ NN   NN  AA  AA  ZZZZZ</pre>
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = 'eliza-transcript.txt';
+      a.download = 'NAZ-transcript.txt';
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -583,7 +583,7 @@ NN   NN  AA  AA  ZZZZZ</pre>
     // Init
     loadTranscript();
     if(chatEl.children.length === 0){
-      addMessage('ELIZA', 'Hello. How are you feeling today?');
+      addMessage('NAZ', 'Hello. How are you feeling today?');
     }
 
     // Autofocus
